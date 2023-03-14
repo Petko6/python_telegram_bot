@@ -1,117 +1,103 @@
-from telethon.sync import TelegramClient
-import asyncio
-import time
-import json
 import os
+import json
+import subprocess
+from subprocess import PIPE
+from operator import methodcaller
 from os import path
-
-import bot2 as bot2
-# Logging configuration
+from telethon.sync import TelegramClient
 
 
-def login(credential):
-    global client
-    client = TelegramClient(
-        credential["phone"], credential["api_id"], credential["api_hash"])
-    client.connect()
-    if not client.is_user_authorized():  # If further authentication is needed via text
-        client.send_code_request(credential["phone"])
-        print('Further authentication required in order to log in, a code has been sent to the phone number.')
-        client.sign_in(credential["phone"], input('Enter the code: '))
-    print(f"Logged in as {client.get_me().username}!")
+def read_settings():
+    print('Reading settings...')
+    with open('settings.txt', 'r') as f:
+        global settings
+        settings = f.read()
+        settings = json.loads(settings)
 
 
-async def get_users(group):
-    await client.get_dialogs()
+def login():
+    if settings is not None:
+        # for credential in credentials:
+        credential = settings['credentials'][0]
+        global client
+        client = TelegramClient(
+            credential["phone"], credential["api_id"], credential["api_hash"])
+        client.connect()
+        if not client.is_user_authorized():  # If further authentication is needed via text
+            client.send_code_request(credential["phone"])
+            print(
+                'Further authentication required in order to log in, a code has been sent to the phone number.')
+            client.sign_in(credential["phone"], input('Enter the code: '))
+        print(f"Logged in as { client.get_me()}!")
 
+
+def get_users():
+    group = settings['group_name']
+    if path.exists('users.txt'):
+        print('Users already scraped, to reset the user list delete "users.txt"')
+    else:
+        client.get_dialogs()
+
+        try:
+            user_list = client.get_participants(group, aggressive=True)
+            users = [
+                user.username for user in user_list if user.username is not None]
+            with open("users.txt", 'w+') as f:
+                for user in users:
+                    f.write(user+"\n")
+                print(f"{len(user_list)} users exported to {f.name}!")
+        except:
+            print('Couldnt get users.')
+
+
+def setup():
+    print('Setting up a new configuration...')
     try:
-        user_list = await client.get_participants(group, aggressive=True)
-        users = [user.username for user in user_list if user.username is not None]
-        with open("users.txt", 'w+') as f:
-            for user in users:
-                f.write(user+"\n")
-            print(f"{len(user_list)} users exported to {f.name}!")
-    except:
-        print('One of the given settings is invalid!')
-        save_settings(
-            input('Group name: '), input('Message: '), input('Delay: '))
+        group_name = input('Group name: ')
+        message = input('Message: ')
+        delay = input('Delay (in seconds): ')
+        credentials = []
+        for i in range(int(input('How many bots do you wish to have?: '))):
+            print('Now creating Bot ' + str(i+1)+'...')
+            credentials.append({'phone': input('Phone # (EX: +11234560000): '), 'api_id': input(
+                'api_id (EX: 101340): '), 'api_hash': input('api_hash (EX: ca123req3410fdls343207cc743): ')})
 
-
-async def send_messages(message, users, delay):
-    os.system("start cmd /k python3 bot2.py")
-    for user in users:
-        await client.send_message(user, message)
-        print(f"Message sent to {user}.")
-        time.sleep(delay)
-
-
-def save_credentials(*args):
-    print('Saving credentials...')
-    with open('creds.txt', 'w+') as f:
-        for arg in args:
-            f.write(f'{arg}\n')
-
-
-def read_credentials():
-    print('Reading credentials...')
-    with open('creds.txt', 'r') as f:
-      #  return [line for line in f.read().split('\n') if line != '']
-        data = f.read()
-        return json.loads(data)
-
-
-async def save_settings(group_name, message, delay):
-    print('Saving settings...')
-    try:
         settings = {'group_name': group_name,
-                    'message': message, 'delay': int(delay)}
+                    'message': message, 'delay': int(delay), 'credentials': credentials}
+
         with open('settings.txt', 'w+') as f:
             f.write(json.dumps(settings))
+            print('Settings saved.')
+
+        options = ['start()', 'os._exit(1)']
+        option = options[int(input(
+            'Choose what you want to do next(1 - 2):\n-1 Start your bot\n-2 Exit\n '))-1]
+        print(option.capitalize() + ' is running...')
+        eval(option)
+
+    except KeyboardInterrupt:
+        os._exit(1)
     except:
-        print("Input for delay isn't a number")
+        print('One of inserted values is incorrect. Try again!')
+        setup()
 
 
-def read_settings(setting):
-    print('Reading '+setting+'...')
-    with open('settings.txt', 'r') as f:
-        data = f.read()
-        return json.loads(data)[setting]
+def start():
 
-
-def load_users():
-    with open('users.txt', 'r') as f:
-        userList = f.read().split('\n')
-        lines = len(userList)
-        return userList[0:lines//5]
+    read_settings()
+    login()
+    get_users()
+    credentials = settings['credentials']
+    for i in range(len(credentials)):
+        os.system("start cmd /k python3 bot.py"+' '+str(i))
 
 
 def main():
-    # Check if credentials are saved, otherwise get them from the user
-    if path.exists('creds.txt'):
-        credentials = read_credentials()
-
-        # for credential in credentials:
-        login(credentials[0])
-
-    else:
-        # Needed for login authentication
-        print('Find these at https://my.telegram.org/ under API Development tools.')
-        save_credentials(
-            input('Phone # (EX: +11234560000): '),
-            input('api_id (EX: 101340): '),
-            input('api_hash (EX: ca123req3410fdls343207cc743): ')
-        )
-        credentials = read_credentials()
-        login(*credentials)
-    # Async routines
-    print("bot1", credentials[0])
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(save_settings(
-        input('Group name: '), input('Message: '), input('Delay: ')))
-    loop.run_until_complete(get_users(read_settings('group_name')))
-    loop.run_until_complete(send_messages(read_settings(
-        'message'), load_users(), read_settings('delay')))
-    loop.close()
+    options = ['setup()', 'start()']
+    option = options[int(input(
+        'Welcome to Telegram bot by Petko. Choose what you want to do (1 - 2):\n-1 Create new configuration\n-2 Start bot with existing configuration\n '))-1]
+    print(option.capitalize() + ' is running...')
+    eval(option)
 
 
 if __name__ == '__main__':
