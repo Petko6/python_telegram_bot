@@ -83,20 +83,22 @@ def setup():
 
 
 def start():
-
-    read_settings()
-    login()
-    get_users()
-    credentials = settings['credentials']
-    for i in range(len(credentials)):
-        os.system("start cmd /k python3 bot.py"+' '+str(i))
+    try:
+        read_settings()
+        login()
+        get_users()
+        credentials = settings['credentials']
+        for i in range(len(credentials)):
+            os.system("start cmd /k python3 bot.py"+' '+str(i))
+    except:
+        print('There is no configuration yet!')
+        setup()
 
 
 def main():
     options = ['setup()', 'start()']
     option = options[int(input(
         'Welcome to Telegram bot by Petko. Choose what you want to do (1 - 2):\n-1 Create new configuration\n-2 Start bot with existing configuration\n '))-1]
-    print(option.capitalize() + ' is running...')
     eval(option)
 
 
