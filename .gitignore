@@ -132,4 +132,5 @@ dmypy.json
 *.session-journal
 
 *.txt
+*.exe
 
